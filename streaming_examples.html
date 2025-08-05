@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPT Streaming API Examples</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .example { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+        .response-box { background: #f5f5f5; padding: 15px; border-radius: 4px; min-height: 100px; white-space: pre-wrap; }
+        button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .status { margin: 10px 0; font-weight: bold; }
+        input, textarea { width: 100%; padding: 8px; margin: 5px 0; border: 1px solid #ddd; border-radius: 4px; }
+        textarea { height: 80px; resize: vertical; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 GPT Streaming API Examples</h1>
+        <p>Test your FastAPI backend with real-time streaming responses!</p>
+
+        <!-- Server-Sent Events Example -->
+        <div class="example">
+            <h2>📡 Server-Sent Events (SSE) Streaming</h2>
+            <div>
+                <textarea id="sseQuery" placeholder="Enter your query...">What is artificial intelligence?</textarea>
+                <br>
+                <button onclick="testSSE()">Start SSE Stream</button>
+                <button onclick="stopSSE()">Stop Stream</button>
+            </div>
+            <div class="status" id="sseStatus">Ready</div>
+            <div class="response-box" id="sseResponse">Response will appear here...</div>
+        </div>
+
+        <!-- WebSocket Example -->
+        <div class="example">
+            <h2>🔌 WebSocket Streaming</h2>
+            <div>
+                <textarea id="wsQuery" placeholder="Enter your query...">Explain quantum computing in simple terms</textarea>
+                <br>
+                <button onclick="connectWS()">Connect WebSocket</button>
+                <button onclick="sendWSQuery()">Send Query</button>
+                <button onclick="disconnectWS()">Disconnect</button>
+            </div>
+            <div class="status" id="wsStatus">Disconnected</div>
+            <div class="response-box" id="wsResponse">Response will appear here...</div>
+        </div>
+
+        <!-- Comparison with Regular API -->
+        <div class="example">
+            <h2>⚡ Regular API (Non-Streaming)</h2>
+            <div>
+                <textarea id="regularQuery" placeholder="Enter your query...">Write a short poem about coding</textarea>
+                <br>
+                <button onclick="testRegular()">Send Regular Request</button>
+            </div>
+            <div class="status" id="regularStatus">Ready</div>
+            <div class="response-box" id="regularResponse">Response will appear here...</div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8001/api/v1';
+        let eventSource = null;
+        let websocket = null;
+
+        // Server-Sent Events
+        function testSSE() {
+            const query = document.getElementById('sseQuery').value;
+            const statusEl = document.getElementById('sseStatus');
+            const responseEl = document.getElementById('sseResponse');
+            
+            if (!query.trim()) {
+                alert('Please enter a query');
+                return;
+            }
+
+            stopSSE(); // Stop any existing stream
+            responseEl.textContent = '';
+            statusEl.textContent = 'Connecting...';
+
+            // Create SSE request
+            const requestBody = JSON.stringify({ query: query });
+            
+            fetch(`${API_BASE}/query/stream`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'text/event-stream',
+                },
+                body: requestBody
+            }).then(response => {
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                statusEl.textContent = 'Streaming...';
+                
+                function readStream() {
+                    reader.read().then(({ done, value }) => {
+                        if (done) {
+                            statusEl.textContent = 'Stream completed';
+                            return;
+                        }
+                        
+                        const chunk = decoder.decode(value);
+                        const lines = chunk.split('\n');
+                        
+                        lines.forEach(line => {
+                            if (line.startsWith('data: ')) {
+                                const data = line.substring(6);
+                                if (data === '[DONE]') {
+                                    statusEl.textContent = 'Completed';
+                                    return;
+                                }
+                                
+                                try {
+                                    const parsed = JSON.parse(data);
+                                    if (parsed.type === 'content') {
+                                        responseEl.textContent += parsed.chunk;
+                                    } else if (parsed.type === 'error') {
+                                        responseEl.textContent += `\n\nERROR: ${parsed.error}`;
+                                        statusEl.textContent = 'Error occurred';
+                                    } else if (parsed.type === 'end') {
+                                        statusEl.textContent = `Completed (${parsed.processing_time.toFixed(2)}s, ${parsed.tokens_used} tokens)`;
+                                    }
+                                } catch (e) {
+                                    console.log('Non-JSON data:', data);
+                                }
+                            }
+                        });
+                        
+                        readStream();
+                    }).catch(err => {
+                        console.error('Stream error:', err);
+                        statusEl.textContent = 'Stream error';
+                    });
+                }
+                
+                readStream();
+                
+            }).catch(err => {
+                console.error('Fetch error:', err);
+                statusEl.textContent = `Error: ${err.message}`;
+            });
+        }
+
+        function stopSSE() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+        }
+
+        // WebSocket
+        function connectWS() {
+            const statusEl = document.getElementById('wsStatus');
+            
+            if (websocket) {
+                websocket.close();
+            }
+
+            statusEl.textContent = 'Connecting...';
+            websocket = new WebSocket('ws://localhost:8001/api/v1/query/ws');
+            
+            websocket.onopen = function() {
+                statusEl.textContent = 'Connected';
+            };
+            
+            websocket.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                const responseEl = document.getElementById('wsResponse');
+                
+                if (data.type === 'content') {
+                    responseEl.textContent += data.chunk;
+                } else if (data.type === 'error') {
+                    responseEl.textContent += `\n\nERROR: ${data.error}`;
+                } else if (data.type === 'end') {
+                    document.getElementById('wsStatus').textContent = `Completed (${data.processing_time.toFixed(2)}s, ${data.tokens_used} tokens)`;
+                }
+            };
+            
+            websocket.onclose = function() {
+                statusEl.textContent = 'Disconnected';
+            };
+            
+            websocket.onerror = function(error) {
+                statusEl.textContent = 'Connection error';
+                console.error('WebSocket error:', error);
+            };
+        }
+
+        function sendWSQuery() {
+            if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+                alert('Please connect WebSocket first');
+                return;
+            }
+            
+            const query = document.getElementById('wsQuery').value;
+            if (!query.trim()) {
+                alert('Please enter a query');
+                return;
+            }
+            
+            document.getElementById('wsResponse').textContent = '';
+            document.getElementById('wsStatus').textContent = 'Sending query...';
+            
+            websocket.send(JSON.stringify({
+                query: query,
+                model: 'gpt-4o-mini',
+                temperature: 0.7,
+                max_tokens: 300
+            }));
+        }
+
+        function disconnectWS() {
+            if (websocket) {
+                websocket.close();
+                websocket = null;
+            }
+        }
+
+        // Regular API
+        function testRegular() {
+            const query = document.getElementById('regularQuery').value;
+            const statusEl = document.getElementById('regularStatus');
+            const responseEl = document.getElementById('regularResponse');
+            
+            if (!query.trim()) {
+                alert('Please enter a query');
+                return;
+            }
+
+            statusEl.textContent = 'Sending request...';
+            responseEl.textContent = 'Waiting for complete response...';
+            
+            const startTime = Date.now();
+            
+            fetch(`${API_BASE}/query`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ query: query })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const endTime = Date.now();
+                const duration = (endTime - startTime) / 1000;
+                
+                if (data.success) {
+                    responseEl.textContent = data.response;
+                    statusEl.textContent = `Completed (${duration.toFixed(2)}s, ${data.tokens_used} tokens)`;
+                } else {
+                    responseEl.textContent = `Error: ${data.error}`;
+                    statusEl.textContent = 'Error occurred';
+                }
+            })
+            .catch(err => {
+                console.error('Error:', err);
+                statusEl.textContent = `Error: ${err.message}`;
+                responseEl.textContent = 'Request failed';
+            });
+        }
+
+        // Auto-connect WebSocket on page load
+        window.addEventListener('load', function() {
+            // You can auto-connect if desired
+            // connectWS();
+        });
+    </script>
+</body>
+</html>
