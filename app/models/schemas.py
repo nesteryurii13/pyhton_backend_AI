@@ -12,7 +12,10 @@ class GPTModelEnum(str, Enum):
     GPT_35_TURBO = "gpt-3.5-turbo"
     GPT_4 = "gpt-4"
     GPT_4_TURBO = "gpt-4-turbo"
+    GPT_4_O = "gpt-4o"  # Latest flagship model
     GPT_4_O_MINI = "gpt-4o-mini"
+    O1_MINI = "o1-mini"  # Reasoning model (faster)
+    O1 = "o1"  # Reasoning model (more capable)
 
 
 class BaseResponse(BaseModel):
@@ -45,8 +48,8 @@ class GPTQueryRequest(BaseModel):
     )
     model: Optional[GPTModelEnum] = Field(
         default=None,
-        description="GPT model to use (if not specified, uses default: gpt-4o-mini)",
-        examples=["gpt-4o-mini", "gpt-3.5-turbo", "gpt-4"]
+        description="GPT model to use (if not specified, uses default from environment)",
+        examples=["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o1-mini"]
     )
     temperature: Optional[float] = Field(
         default=None,
@@ -75,30 +78,60 @@ class GPTQueryRequest(BaseModel):
         "json_schema_extra": {
             "examples": [
                 {
-                    "summary": "Simple Question",
-                    "description": "A basic question to GPT",
+                    "summary": "Simple Question (Default Model)",
+                    "description": "Basic question using default model from environment",
                     "value": {
-                        "query": "What is artificial intelligence?"
+                        "query": "What is artificial intelligence and how does it work?"
                     }
                 },
                 {
-                    "summary": "Advanced Query with Parameters",
-                    "description": "Query with model and parameter customization",
+                    "summary": "GPT-4o - Complex Analysis",
+                    "description": "Using latest GPT-4o for comprehensive analysis",
                     "value": {
-                        "query": "Explain quantum computing in simple terms",
+                        "query": "Compare the environmental impact of electric vehicles vs gasoline cars, considering manufacturing, usage, and disposal phases.",
+                        "model": "gpt-4o",
+                        "temperature": 0.3,
+                        "max_tokens": 600
+                    }
+                },
+                {
+                    "summary": "GPT-4o-mini - Code Generation",
+                    "description": "Fast coding task with GPT-4o-mini",
+                    "value": {
+                        "query": "Write a Python function that implements binary search with error handling and comments.",
                         "model": "gpt-4o-mini",
-                        "temperature": 0.7,
+                        "temperature": 0.1,
                         "max_tokens": 300
                     }
                 },
                 {
-                    "summary": "Creative Writing",
+                    "summary": "o1-mini - Math & Reasoning",
+                    "description": "Step-by-step reasoning with o1-mini",
+                    "value": {
+                        "query": "A train travels from City A to City B at 80 km/h and returns at 120 km/h. If the total journey takes 5 hours, what is the distance between the cities?",
+                        "model": "o1-mini",
+                        "temperature": 0.2,
+                        "max_tokens": 400
+                    }
+                },
+                {
+                    "summary": "GPT-4-turbo - Creative Writing",
                     "description": "Creative task with higher temperature",
                     "value": {
-                        "query": "Write a short poem about artificial intelligence",
-                        "model": "gpt-4o-mini",
-                        "temperature": 0.9,
-                        "max_tokens": 200
+                        "query": "Write a compelling short story about a data scientist who discovers that AI models are dreaming. Make it mysterious and thought-provoking.",
+                        "model": "gpt-4-turbo",
+                        "temperature": 0.8,
+                        "max_tokens": 500
+                    }
+                },
+                {
+                    "summary": "o1 - Complex Problem Solving",
+                    "description": "Advanced reasoning for complex problems",
+                    "value": {
+                        "query": "Design a sustainable city transportation system that reduces emissions by 70% while maintaining accessibility for all income levels. Consider costs, technology, and social impact.",
+                        "model": "o1",
+                        "temperature": 0.4,
+                        "max_tokens": 800
                     }
                 }
             ]
@@ -129,11 +162,11 @@ class GPTQueryResponse(BaseResponse):
         "json_schema_extra": {
             "example": {
                 "success": True,
-                "timestamp": "2024-01-01T12:00:00",
-                "response": "Quantum computing is a type of computation that harnesses quantum mechanics...",
-                "model_used": "gpt-3.5-turbo",
-                "tokens_used": 150,
-                "processing_time": 2.34
+                "timestamp": "2024-01-15T14:30:25.123456",
+                "response": "Artificial Intelligence (AI) is a branch of computer science that focuses on creating systems capable of performing tasks that typically require human intelligence. These tasks include learning from data, recognizing patterns, making decisions, understanding natural language, and solving complex problems.\n\nAt its core, AI works by processing large amounts of data through sophisticated algorithms and mathematical models. Machine learning, a subset of AI, enables systems to improve their performance automatically through experience without being explicitly programmed for every scenario.\n\nModern AI applications include virtual assistants like Siri and Alexa, recommendation systems on Netflix and Amazon, autonomous vehicles, medical diagnosis tools, and language models like ChatGPT. The field continues to evolve rapidly, with recent breakthroughs in deep learning and neural networks opening new possibilities for human-AI collaboration.",
+                "model_used": "gpt-4o",
+                "tokens_used": 187,
+                "processing_time": 1.82
             }
         }
     }
@@ -267,12 +300,33 @@ class WebSocketQueryRequest(BaseModel):
         "json_schema_extra": {
             "examples": [
                 {
-                    "summary": "Simple WebSocket Query",
-                    "description": "Basic query via WebSocket",
+                    "summary": "Real-time Chat with GPT-4o",
+                    "description": "Interactive conversation via WebSocket",
                     "value": {
-                        "query": "What is artificial intelligence?",
+                        "query": "Explain machine learning in simple terms that a beginner can understand",
+                        "model": "gpt-4o",
+                        "temperature": 0.6,
+                        "max_tokens": 400
+                    }
+                },
+                {
+                    "summary": "Code Review with GPT-4o-mini",
+                    "description": "Fast code analysis via WebSocket",
+                    "value": {
+                        "query": "Review this Python function and suggest improvements: def calculate_average(numbers): return sum(numbers) / len(numbers)",
                         "model": "gpt-4o-mini",
-                        "temperature": 0.7
+                        "temperature": 0.2,
+                        "max_tokens": 300
+                    }
+                },
+                {
+                    "summary": "Math Problem with o1-mini",
+                    "description": "Step-by-step reasoning via WebSocket",
+                    "value": {
+                        "query": "Solve and explain: If I invest $1000 at 5% annual compound interest, how much will I have after 10 years?",
+                        "model": "o1-mini",
+                        "temperature": 0.1,
+                        "max_tokens": 350
                     }
                 }
             ]
